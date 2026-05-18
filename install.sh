@@ -40,14 +40,12 @@ else
     echo "$HOME/.config/mathlock/config.json already exists; leaving it alone."
 fi
 
-# Disable xfce4-screensaver's built-in password lock dialog. The screensaver
-# visuals still play; the lock-on-activate behavior is what gets turned off,
-# leaving xss-lock to do the actual locking via mathlock.
-#
-# Key name may vary by xfce4-screensaver version; verify afterward with:
-#     xfconf-query -c xfce4-screensaver -lv
+# Disable xfce4-screensaver's lock-on-screensaver-activation. The saver visuals
+# still play; only the password dialog is suppressed, leaving xss-lock to do
+# the actual locking via mathlock.
 echo "Disabling xfce4-screensaver's built-in lock..."
-xfconf-query -c xfce4-screensaver -p /lock/enabled -s false --create -t bool || true
+xfconf-query -c xfce4-screensaver -p /lock/saver-activation/enabled \
+    -s false --create -t bool
 
 cat <<'EOF'
 
