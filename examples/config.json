@@ -1,0 +1,19 @@
+{
+  "active_set": "mult_to_12",
+  "parent_override": "mathlock",
+  "problem_sets": {
+    "mult_to_12": {
+      "operations": ["*"],
+      "range": [1, 12]
+    },
+    "add_sub_20": {
+      "operations": ["+", "-"],
+      "range": [1, 20],
+      "no_negative_results": true
+    },
+    "mult_to_5": {
+      "operations": ["*"],
+      "range": [1, 5]
+    }
+  }
+}

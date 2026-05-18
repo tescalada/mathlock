@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""Math-problem lockscreen. Invoked by xss-lock when the screensaver activates.
+
+Exits 0 when the user enters a correct answer (or the configured override
+string), which xss-lock interprets as a successful unlock.
+"""
+import json
+import random
+import sys
+from pathlib import Path
+
+import gi
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk, Gdk, GLib
+
+CONFIG_PATH = Path.home() / ".config" / "mathlock" / "config.json"
+
+CSS = b"""
+window         { background-color: #1a1a2e; }
+label.problem  { color: #ffffff; font-size: 96px; font-weight: bold; }
+label.feedback { color: #ff6b6b; font-size: 32px; }
+entry          { font-size: 60px; min-width: 400px; padding: 20px; }
+"""
+
+
+def generate_problem(set_def):
+    lo, hi = set_def["range"]
+    op = random.choice(set_def["operations"])
+    a, b = random.randint(lo, hi), random.randint(lo, hi)
+    if op == "-" and set_def.get("no_negative_results") and b > a:
+        a, b = b, a
+    ans = {"+": a + b, "-": a - b, "*": a * b}[op]
+    return f"{a} {op} {b} = ?", ans
+
+
+class MathLock(Gtk.Window):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.set_decorated(False)
+        self.set_keep_above(True)
+        self.fullscreen()
+
+        provider = Gtk.CssProvider()
+        provider.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(),
+            provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
+
+        self.connect("key-press-event", self._eat_nav_keys)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=30)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_valign(Gtk.Align.CENTER)
+        self.add(box)
+
+        self.problem = Gtk.Label()
+        self.problem.get_style_context().add_class("problem")
+        box.pack_start(self.problem, False, False, 0)
+
+        self.entry = Gtk.Entry()
+        self.entry.set_alignment(0.5)
+        self.entry.set_max_length(8)
+        self.entry.connect("activate", self._on_submit)
+        box.pack_start(self.entry, False, False, 0)
+
+        self.feedback = Gtk.Label()
+        self.feedback.get_style_context().add_class("feedback")
+        box.pack_start(self.feedback, False, False, 0)
+
+        self._new_problem()
+
+    def _new_problem(self):
+        set_def = self.config["problem_sets"][self.config["active_set"]]
+        text, self.answer = generate_problem(set_def)
+        self.problem.set_text(text)
+        self.entry.set_text("")
+        self.feedback.set_text("")
+        self.entry.grab_focus()
+
+    def _on_submit(self, entry):
+        text = entry.get_text().strip()
+        override = self.config.get("parent_override")
+        if override and text == override:
+            Gtk.main_quit()
+            return
+        try:
+            ans = int(text)
+        except ValueError:
+            self.feedback.set_text("type a number")
+            self.entry.set_text("")
+            return
+        if ans == self.answer:
+            Gtk.main_quit()
+        else:
+            self.feedback.set_text("nope, try again")
+            self.entry.set_text("")
+            self.entry.grab_focus()
+
+    def _eat_nav_keys(self, _widget, event):
+        return event.keyval in (
+            Gdk.KEY_Escape,
+            Gdk.KEY_Tab,
+            Gdk.KEY_Super_L,
+            Gdk.KEY_Super_R,
+        )
+
+
+def _grab_input(win):
+    seat = Gdk.Display.get_default().get_default_seat()
+    seat.grab(
+        win.get_window(),
+        Gdk.SeatCapabilities.ALL,
+        True,
+        None,
+        None,
+        None,
+        None,
+    )
+    return False
+
+
+def main():
+    try:
+        with CONFIG_PATH.open() as f:
+            config = json.load(f)
+    except FileNotFoundError:
+        sys.stderr.write(f"mathlock: config not found at {CONFIG_PATH}\n")
+        sys.exit(1)
+    win = MathLock(config)
+    win.show_all()
+    GLib.idle_add(_grab_input, win)
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    main()
