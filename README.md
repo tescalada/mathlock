@@ -24,10 +24,12 @@ cd mathlock
 ./install.sh
 ```
 
+`install.sh` is a per-user install — the locker lands in `~/.local/bin/mathlock`. The only `sudo` is for `apt install xss-lock` (skipped if already installed).
+
 Then either log out and back in, or start it for the current session:
 
 ```sh
-xss-lock --transfer-sleep-lock -- /usr/local/bin/mathlock &
+xss-lock --transfer-sleep-lock -- ~/.local/bin/mathlock &
 ```
 
 ## Configuration
@@ -64,9 +66,9 @@ xfconf-query -c xfce4-screensaver -p /saver/idle-activation/delay -s <minutes>
 ## Uninstall
 
 ```sh
-sudo rm /usr/local/bin/mathlock
+rm ~/.local/bin/mathlock
 rm ~/.config/autostart/mathlock-xss.desktop
-xfconf-query -c xfce4-screensaver -p /lock/enabled -s true
+xfconf-query -c xfce4-screensaver -p /lock/saver-activation/enabled -r
 # kill any running xss-lock so it doesn't try to launch a now-missing locker:
 pkill xss-lock
 ```

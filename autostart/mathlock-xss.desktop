@@ -2,7 +2,7 @@
 Type=Application
 Name=Math Lock (xss-lock)
 Comment=Launch xss-lock with mathlock as the locker
-Exec=xss-lock --transfer-sleep-lock -- /usr/local/bin/mathlock
+Exec=xss-lock --transfer-sleep-lock -- @MATHLOCK_BIN@
 X-GNOME-Autostart-enabled=true
 NoDisplay=false
 Terminal=false
