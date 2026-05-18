@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Math Lock launcher
+Comment=Watch xfce4-screensaver and launch mathlock on activation
+Exec=@MATHLOCK_LAUNCHER@
+X-GNOME-Autostart-enabled=true
+NoDisplay=false
+Terminal=false

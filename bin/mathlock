@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Math-problem lockscreen. Invoked by xss-lock when the screensaver activates.
+"""Math-problem lockscreen.
 
-Exits 0 when the user enters a correct answer (or the configured override
-string), which xss-lock interprets as a successful unlock.
+Runs fullscreen, grabs keyboard + pointer, displays a math problem from the
+config's active set. Exits 0 on a correct answer or the configured override
+string. Designed to be launched by mathlock-launcher when xfce4-screensaver
+activates, but can also be run standalone.
 """
 import json
 import random
@@ -37,6 +39,7 @@ class MathLock(Gtk.Window):
     def __init__(self, config):
         super().__init__()
         self.config = config
+        self._typed_buffer = ""
         self.set_decorated(False)
         self.set_keep_above(True)
         self.fullscreen()
@@ -49,7 +52,7 @@ class MathLock(Gtk.Window):
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
 
-        self.connect("key-press-event", self._eat_nav_keys)
+        self.connect("key-press-event", self._on_key_press)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=30)
         box.set_halign(Gtk.Align.CENTER)
@@ -78,34 +81,82 @@ class MathLock(Gtk.Window):
         self.problem.set_text(text)
         self.entry.set_text("")
         self.feedback.set_text("")
+        self._typed_buffer = ""
         self.entry.grab_focus()
 
     def _on_submit(self, entry):
-        text = entry.get_text().strip()
+        # Override match uses the full hidden buffer (parent can type letters
+        # without the kid seeing them on screen). Math answer parses only the
+        # digits, ignoring any letters that may have slipped in.
         override = self.config.get("parent_override")
-        if override and text == override:
+        if override and self._typed_buffer == override:
             Gtk.main_quit()
             return
+        digits = "".join(c for c in entry.get_text() if c.isdigit())
+        if not digits:
+            self.feedback.set_text("type a number")
+            self.entry.set_text("")
+            self._typed_buffer = ""
+            self.entry.grab_focus()
+            return
         try:
-            ans = int(text)
+            ans = int(digits)
         except ValueError:
             self.feedback.set_text("type a number")
             self.entry.set_text("")
+            self._typed_buffer = ""
+            self.entry.grab_focus()
             return
         if ans == self.answer:
             Gtk.main_quit()
         else:
             self.feedback.set_text("nope, try again")
             self.entry.set_text("")
+            self._typed_buffer = ""
             self.entry.grab_focus()
 
-    def _eat_nav_keys(self, _widget, event):
-        return event.keyval in (
+    def _on_key_press(self, _widget, event):
+        keyval = event.keyval
+
+        if keyval in (
             Gdk.KEY_Escape,
             Gdk.KEY_Tab,
             Gdk.KEY_Super_L,
             Gdk.KEY_Super_R,
+        ):
+            return True
+
+        if keyval == Gdk.KEY_BackSpace:
+            if self._typed_buffer:
+                last = self._typed_buffer[-1]
+                self._typed_buffer = self._typed_buffer[:-1]
+                # Letter wasn't shown in the entry, so backspace shouldn't
+                # remove a visible char either — swallow the event.
+                if not last.isdigit():
+                    return True
+            return False
+
+        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            return False
+
+        is_digit_key = (
+            Gdk.KEY_0 <= keyval <= Gdk.KEY_9
+            or Gdk.KEY_KP_0 <= keyval <= Gdk.KEY_KP_9
         )
+
+        char = event.string or ""
+
+        if is_digit_key:
+            if char:
+                self._typed_buffer += char
+            return False
+
+        if char and char.isprintable():
+            # Track in hidden buffer for override matching; don't echo.
+            self._typed_buffer += char
+            return True
+
+        return False
 
 
 def _grab_input(win):
