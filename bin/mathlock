@@ -67,6 +67,7 @@ class MathLock(Gtk.Window):
         self.entry.set_alignment(0.5)
         self.entry.set_max_length(8)
         self.entry.connect("activate", self._on_submit)
+        self.entry.connect("changed", self._on_changed)
         box.pack_start(self.entry, False, False, 0)
 
         self.feedback = Gtk.Label()
@@ -84,36 +85,40 @@ class MathLock(Gtk.Window):
         self._typed_buffer = ""
         self.entry.grab_focus()
 
-    def _on_submit(self, entry):
+    def _check_unlock(self):
         # Override match uses the full hidden buffer (parent can type letters
         # without the kid seeing them on screen). Math answer parses only the
         # digits, ignoring any letters that may have slipped in.
         override = self.config.get("parent_override")
         if override and self._typed_buffer == override:
             Gtk.main_quit()
+            return True
+        digits = "".join(c for c in self.entry.get_text() if c.isdigit())
+        if digits:
+            try:
+                if int(digits) == self.answer:
+                    Gtk.main_quit()
+                    return True
+            except ValueError:
+                pass
+        return False
+
+    def _on_changed(self, _entry):
+        # Clear any stale "nope" feedback as soon as the kid keeps typing.
+        if self.feedback.get_text():
+            self.feedback.set_text("")
+        self._check_unlock()
+
+    def _on_submit(self, entry):
+        if self._check_unlock():
             return
+        # Explicit Enter on a wrong/empty answer: reset, then show feedback
+        # (set_text fires _on_changed which clears feedback, so order matters).
         digits = "".join(c for c in entry.get_text() if c.isdigit())
-        if not digits:
-            self.feedback.set_text("type a number")
-            self.entry.set_text("")
-            self._typed_buffer = ""
-            self.entry.grab_focus()
-            return
-        try:
-            ans = int(digits)
-        except ValueError:
-            self.feedback.set_text("type a number")
-            self.entry.set_text("")
-            self._typed_buffer = ""
-            self.entry.grab_focus()
-            return
-        if ans == self.answer:
-            Gtk.main_quit()
-        else:
-            self.feedback.set_text("nope, try again")
-            self.entry.set_text("")
-            self._typed_buffer = ""
-            self.entry.grab_focus()
+        self.entry.set_text("")
+        self._typed_buffer = ""
+        self.feedback.set_text("nope, try again" if digits else "type a number")
+        self.entry.grab_focus()
 
     def _on_key_press(self, _widget, event):
         keyval = event.keyval
@@ -149,11 +154,13 @@ class MathLock(Gtk.Window):
         if is_digit_key:
             if char:
                 self._typed_buffer += char
+            # Digit also lands in the entry; _on_changed handles the math check.
             return False
 
         if char and char.isprintable():
             # Track in hidden buffer for override matching; don't echo.
             self._typed_buffer += char
+            self._check_unlock()
             return True
 
         return False
